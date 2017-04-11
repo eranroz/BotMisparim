@@ -271,9 +271,9 @@ def run(gen, allow_fix=False, summary=None):
 
     output_report = ''
     for err, pages in sorted([(err, pages) for err, pages in error_types.items()],
-                             key=lambda x: len(set(p.title() for p, u in x[1]))):
+                             key=lambda x: len(set(p for p, u in x[1]))):
         output_report += '\n*' + err
-        page_usages = set(['*#[[{}]] - {}'.format(page.title(), usage) for page, usage in pages])
+        page_usages = set(['*#[[{}]] - {}'.format(page, usage) for page, usage in pages])
         output_report += '\n' + '\n'.join(sorted(page_usages))
     report_page = pywikibot.Page(pywikibot.Site(), 'ויקיפדיה:תחזוקה/שתי שקל')
     intro = '''

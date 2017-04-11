@@ -29,8 +29,8 @@ The bot is heavily based on heuristics so don't always trust it!
 
 Here are some possible mistakes:
 * שבע may be 
-** זקן ושבע ימים
-**שבע מרורים
+  * זקן ושבע ימים
+  * שבע מרורים
 * בני תשע + (males)
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 r"""
 This bot finds grammar errors in Hebrew. See README.md for more details.
@@ -27,6 +27,7 @@ from pywikibot import xmlreader
 from pywikibot.diff import PatchManager
 from pywikibot import i18n
 
+
 __author__ = 'eran'
 
 # make sure the dictionary path can be found. Otherwise you would have to explicitly set the path:
@@ -37,23 +38,29 @@ safe_eser_zachar = '(?<!אחת.)(?<!שתים.)(?<!שלוש.)(?<!ארבע.)(?<!ח
 # no 8 - looks similar in both
 # no 7 in zachar - because also mean at the time
 zachar_rgx = re.compile(
-    '(?<!(?<!על) פי)( ו?[משכלב]?)((?<!מצד )שני|שלושה|ארבעה|חמישה|שישה|שבעה|תשעה|' + safe_eser_zachar +
-    '|שלושת|ארבעת|חמשת|ששת|שמונת|תשעת|עשרת) ([א-ת]{2,}|\[\[[א-ת]{2,}(?=\]\][^א-ת])|\[\[[^\]]+?\|[א-ת]{2,}(?=\]\][^א-ת]))',
+    '(?<!(?<!על) פי)( ו?[משכלב]?)((?<!מסדר )(?<!מצד )שני|שלושה|ארבעה|חמישה|שישה|שבעה|תשעה|' + safe_eser_zachar +
+    '|שלושת|ארבעת|חמשת|ששת|שמונת|תשעת|עשרת) ([\'א-ת]{2,}(?![א-ת]*-[א-ת])|\[\[[א-ת]{2,}(?=\]\][^א-ת])|\[\[[^\]]+?\|[א-ת]{2,}(?=\]\][^א-ת]))',
     re.U)
 safe_eser_nekeva = '(?<!אחד.)(?<!שניים.)(?<!שנים.)(?<!שלושה.)(?<!ארבעה.)(?<!חמישה.)(?<!חמשה.)(?<!ששה.)(?<!שישה.)(?<!שבעה.)(?<!שמונה.)(?<!תשעה.)עשר'
 # no 10 in nekeva because of 12-19 in zachar
 nekeva_rgx = re.compile(
-    '(?!(?<!על) פי)(?<! בת)( ו?[משכלב]?)(שתי|שלוש|ארבע|חמש|שש|שבע|תשע|' + safe_eser_nekeva +
-    ') ([א-ת]{2,}|\[\[[א-ת]{2,}(?=\]\][^א-ת])|\[\[[^\]]+?\|[א-ת]{2,}(?=\]\][^א-ת]))', re.U)
+    '(?!(?<!על) פי)(?<! בת)(?<! גיל)(?<! [מלב]גיל)(?<! בני)( ו?[משכלב]?)(שתי|שלוש|ארבע|חמש|שש|(?<!באר )שבע|תשע|' + safe_eser_nekeva +
+    ') ([\'א-ת]{2,}(?![א-ת]*-[א-ת])|\[\[[א-ת]{2,}(?=\]\][^א-ת])|\[\[[^\]]+?\|[א-ת]{2,}(?=\]\][^א-ת]))', re.U)
 pi_regex = re.compile('(?<!על) פי (?:שתיים|שלוש|ארבע|חמש|שש|שבע|תשע|עשר) (?!מאות)', re.U)
 
-remove_cites = re.compile('\{\{ציטוט(?:[^{]+?|\{\{[^{]+?\}\}).+\}\}')
+remove_cites_basic = re.compile('\{\{ציטוט(?:[^{]+?|\{\{[^{]+?\}\}).+\}\}')
+remove_cites = remove_cites_basic
 
 remove_wiki = re.compile('\[\[.+?\||\[\[')
 guess_gender = True
 
 # GrammarError = namedtuple('GrammarError', ['word', 'usage', 'fix'])
 
+def remove_citations(text):
+    text = re.sub(r'<blockquote .*?</blockquote>', '', text)
+    text = remove_cites_basic.sub('', text)  # remove quotes
+    text = remove_cites.sub('', text)  # remove quotes
+    return text
 
 class GrammarError(object):
     def __init__(self, match, is_male):
@@ -162,11 +169,12 @@ def check_zachar_nekeva_old(text, check_pi=True):
 
 
 def check_zachar_nekeva(text, check_pi=True):
-    text = remove_cites.sub('', text)  # remove quotes
+    text = remove_citations(text)
     possible_errors = []
     zachars = zachar_rgx.findall(text)
     nekvas = nekeva_rgx.findall(text)
     allowed_prefixes = ['', 'ה']
+
     has_zachar_nekva_data = re.compile('.+,[זנ](,|$)')
     # for word_list, expectation in [(zachars, 'ע,ז'), (nekvas, 'ע,נ')]:
     for word_list, expectation, is_male in [(zachars, re.compile('[^,]+?,ז'), False),
@@ -210,7 +218,7 @@ def check_zachar_nekeva(text, check_pi=True):
     # pi
     if check_pi:
         incorrect_pi = pi_regex.findall(text)
-        possible_errors += [GrammarError(['פי ', pi_nek, ''], True) for pi_nek in incorrect_pi]
+        possible_errors += [GrammarError(['פי ', pi_nek, 'פי'], True) for pi_nek in incorrect_pi]
     return possible_errors
 
 
@@ -221,7 +229,6 @@ def xml_dump_gen(xml_filename, query):
     for entry in parser:
         if entry.ns != '0' or entry.isredirect:
             continue
-
         possible_errors = query(entry.text)
         if possible_errors:
             yield pywikibot.Page(site, entry.title)
@@ -232,7 +239,8 @@ def run(gen, allow_fix=False, summary=None):
     try:
         for page in gen:
             try:
-                errors = check_zachar_nekeva(page.get(get_redirect=True), not allow_fix)
+                check_pi = not allow_fix
+                errors = check_zachar_nekeva(page.get(get_redirect=True), check_pi)
                 if allow_fix:
                     orig_text = page.get(get_redirect=True)
                     new_text = orig_text
@@ -284,6 +292,7 @@ def run(gen, allow_fix=False, summary=None):
 
 
 def main(*args):
+    global remove_cites
     allow_fix = False
     edit_summary = '[[ויקיפדיה:תחזוקה/שתי שקל|שתי שקל]]'
     xml_filename = None
@@ -306,7 +315,18 @@ def main(*args):
 
     if xml_filename:
         gen = xml_dump_gen(xml_filename, lambda x: check_zachar_nekeva(x, not allow_fix))
-    gen = genFactory.getCombinedGenerator(gen)
+        gen = genFactory.getCombinedGenerator(gen)
+    else:
+        gen = genFactory.getCombinedGenerator()
+        if not gen:
+            pywikibot.bot.suggest_help(missing_generator=True)
+            return False
+
+    cite_templates_cat = pywikibot.Category(pywikibot.Site(), 'תבניות ציטוט').articles(namespaces=10, recurse=True)
+    cite_templates = set([page.title(withNamespace=False) for page in cite_templates_cat] + ['ציטוט', 'ציטוטון'])
+    safeTemplatesRgx = re.compile('\{\{(' + '|'.join(cite_templates, ) + ')[^{]*?\}\}', re.I | re.DOTALL)
+    remove_cites = safeTemplatesRgx
+
     run(gen, allow_fix, edit_summary)
 
 
